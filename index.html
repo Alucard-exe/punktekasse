@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Punktekasse</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Punktekasse">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root{--bg:#eaf3ee;--card:#fff;--ink:#14302e;--mut:#5d7471;--line:#cfe0d8;--pri:#0f5c57;--onpri:#fff;--coin:#e3a72f;--lock:#c9d8d2;--bad:#b3402e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1b1a;--card:#162a28;--ink:#e6f2ee;--mut:#8fa9a4;--line:#27413e;--pri:#4cc2b5;--onpri:#08201e;--coin:#f0b73c;--lock:#2a413e;--bad:#ef8a76}}
+:root[data-theme="dark"]{--bg:#0e1b1a;--card:#162a28;--ink:#e6f2ee;--mut:#8fa9a4;--line:#27413e;--pri:#4cc2b5;--onpri:#08201e;--coin:#f0b73c;--lock:#2a413e;--bad:#ef8a76}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:1.1rem;margin:0 0 12px;font-weight:700}
+h2{font-size:1rem;margin:20px 0 8px}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{flex:1;padding:10px 4px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font:inherit;font-weight:600}
+.tabs button.on{background:var(--pri);color:var(--onpri);border-color:var(--pri)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.big{font-size:2.6rem;font-weight:800;letter-spacing:-.02em;line-height:1.1;color:var(--pri)}
+.mut{color:var(--mut);font-size:.9rem}
+.bar{display:flex;height:22px;border-radius:11px;overflow:hidden;background:var(--lock);margin:12px 0 6px}
+.bar i{display:block;background:var(--coin);transition:width .4s}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row b{flex:1;font-weight:600}
+button.act{padding:9px 14px;border:0;border-radius:10px;background:var(--pri);color:var(--onpri);font:inherit;font-weight:700}
+button.ghost{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--mut);font:inherit}
+input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;margin:4px 0}
+.f{display:flex;gap:8px}.f input{flex:1;min-width:0}
+.msg{padding:10px 12px;border-radius:10px;background:var(--coin);color:#2b1d00;font-weight:600;margin-bottom:12px}
+.msg.err{background:var(--bad);color:#fff}
+.neg{color:var(--bad)}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+var K='punktekasse-v1',tab='home',msg=null;
+var S=load()||{total:500,avail:20,rate:0.5,
+tasks:[{n:'Wäsche waschen',p:10},{n:'Bett machen',p:2},{n:'Spülmaschine ausräumen',p:4}],rec:[],log:[]};
+function load(){try{return JSON.parse(localStorage.getItem(K))}catch(e){return null}}
+function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
+function eur(n){return n.toLocaleString('de-DE',{style:'currency',currency:'EUR'})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function v(id){return document.getElementById(id).value}
+function num(id){return parseFloat(String(v(id)).replace(',','.'))}
+function say(t,e){msg={t:t,e:e};}
+function log(t){S.log.unshift(t);S.log=S.log.slice(0,12)}
+function fix(){S.avail=Math.max(0,Math.min(S.avail,S.total))}
+function go(t){tab=t;msg=null;draw()}
+function done(i){var t=S.tasks[i],g=t.p*S.rate,a=Math.min(g,S.total-S.avail);S.avail+=a;
+ log('+'+t.p+' Punkte: '+t.n+' (+'+eur(a)+')');say(t.n+' erledigt: '+eur(a)+' freigeschaltet');save();draw()}
+function addTask(){var n=v('tn').trim(),p=parseInt(v('tp'));
+ if(!n||!(p>0)){say('Name und Punkte (mind. 1) eingeben.',1);return draw()}
+ S.tasks.push({n:n,p:p});say('Aufgabe hinzugefügt.');save();draw()}
+function delTask(i){S.tasks.splice(i,1);save();draw()}
+function income(){var a=num('ia');if(!(a>0)){say('Betrag eingeben.',1);return draw()}
+ S.total+=a;log('Gehalt/Eingang +'+eur(a));say(eur(a)+' zum Gesamtbetrag addiert.');save();draw()}
+function spend(){var a=num('sa'),n=v('sn').trim()||'Ausgabe';
+ if(!(a>0)){say('Betrag eingeben.',1);return draw()}
+ if(a>S.avail){say('Zu wenig freigeschaltet. Dir fehlen '+eur(a-S.avail)+' ('+Math.ceil((a-S.avail)/S.rate)+' Punkte).',1);return draw()}
+ S.avail-=a;S.total-=a;log('-'+eur(a)+' '+n);say(eur(a)+' ausgegeben.');save();draw()}
+function spendFree(){var a=num('fa'),n=v('fn').trim()||'Ausgabe';
+ if(!(a>0)){say('Betrag eingeben.',1);return draw()}
+ if(a>S.total){say('Der Gesamtbetrag reicht nicht aus ('+eur(S.total)+').',1);return draw()}
+ S.total-=a;fix();log('-'+eur(a)+' '+n+' (ohne Punkte)');say(eur(a)+' vom Gesamtbetrag abgezogen.');save();draw()}
+ function addRec(){var n=v('rn').trim(),a=num('ra'),t=v('rt');
+ if(!n||!(a>0)){say('Name und Betrag eingeben.',1);return draw()}
+ S.rec.push({n:n,a:a,t:t});say('Dauerauftrag gespeichert.');save();draw()}
+function delRec(i){S.rec.splice(i,1);save();draw()}
+function book(){if(!S.rec.length)return;var d=0;
+ S.rec.forEach(function(r){d+=r.t==='in'?r.a:-r.a});
+ S.total+=d;fix();log('Monat gebucht: '+(d>=0?'+':'')+eur(d));say('Monat gebucht ('+(d>=0?'+':'')+eur(d)+').');save();draw()}
+function setRate(){var r=num('rate');if(!(r>0)){say('Wert größer 0 eingeben.',1);return draw()}S.rate=r;say('Umrechnung gespeichert.');save();draw()}
+function reset(){if(confirm('Alle Daten zurücksetzen?')){try{localStorage.removeItem(K)}catch(e){}location.reload()}}
+function draw(){
+ var pct=S.total>0?Math.round(S.avail/S.total*100):0,h='';
+ h+='<h1>Punktekasse</h1><div class="tabs">';
+ [['home','Übersicht'],['tasks','Aufgaben'],['money','Geld']].forEach(function(t){h+='<button class="'+(tab===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'});
+ h+='</div>';
+ if(msg)h+='<div class="msg'+(msg.e?' err':'')+'">'+esc(msg.t)+'</div>';
+ if(tab==='home'){
+  h+='<div class="card"><div class="mut">Jetzt einsetzbar</div><div class="big">'+eur(S.avail)+'</div>'
+  +'<div class="bar"><i style="width:'+pct+'%"></i></div>'
+  +'<div class="mut">Gesperrt: '+eur(S.total-S.avail)+' · Gesamt: '+eur(S.total)+'</div></div>';
+  h+='<div class="card"><b>Nächste Aufgaben</b>';
+  S.tasks.forEach(function(t,i){h+='<div class="row"><b>'+esc(t.n)+'</b><span class="mut">'+eur(t.p*S.rate)+'</span><button class="act" onclick="done('+i+')">+'+t.p+'</button></div>'});
+  h+='</div><h2>Verlauf</h2><div class="card">';
+  h+=S.log.length?S.log.map(function(l){return '<div class="row"><span>'+esc(l)+'</span></div>'}).join(''):'<span class="mut">Noch nichts passiert. Erledige eine Aufgabe, um Geld freizuschalten.</span>';
+  h+='</div>';
+ }
+ if(tab==='tasks'){
+  h+='<div class="card">';
+  h+=S.tasks.length?S.tasks.map(function(t,i){return '<div class="row"><b>'+esc(t.n)+'<div class="mut">'+t.p+' Punkte = '+eur(t.p*S.rate)+'</div></b><button class="act" onclick="done('+i+')">Erledigt</button><button class="ghost" aria-label="Löschen" onclick="delTask('+i+')">×</button></div>'}).join(''):'<span class="mut">Lege deine erste Aufgabe an.</span>';
+  h+='</div><h2>Neue Aufgabe</h2><div class="card"><input id="tn" placeholder="z. B. Müll rausbringen"><div class="f"><input id="tp" type="number" min="1" placeholder="Punkte"><button class="act" onclick="addTask()">Hinzufügen</button></div>'
+  +'<h2>Wert pro Punkt</h2><div class="f"><input id="rate" inputmode="decimal" value="'+String(S.rate).replace('.',',')+'"><button class="act" onclick="setRate()">Speichern</button></div><div class="mut">in Euro</div></div>';
+ }
+ if(tab==='money'){
+  h+='<div class="card"><b>Gehalt eingegangen</b><div class="f"><input id="ia" inputmode="decimal" placeholder="Betrag in €"><button class="act" onclick="income()">Addieren</button></div><div class="mut">Der Betrag landet im gesperrten Teil.</div></div>';
+  h+='<div class="card"><b>Geld ausgeben</b><input id="sn" placeholder="Wofür?"><div class="f"><input id="sa" inputmode="decimal" placeholder="Betrag in €"><button class="act" onclick="spend()">Abziehen</button></div><div class="mut">Verfügbar: '+eur(S.avail)+'</div></div>';
+  h+='<div class="card"><b>Geld abziehen (ohne Punkte)</b><input id="fn" placeholder="Wofür?"><div class="f"><input id="fa" inputmode="decimal" placeholder="Betrag in €"><button class="act" onclick="spendFree()">Abziehen</button></div><div class="mut">Wird vom Gesamtbetrag abgezogen, unabhängig vom freigeschalteten Geld. Gesamt: '+eur(S.total)+'</div></div>';
+  h+='<div class="card"><b>Geld abziehen (ohne Punkte)</b><input id="fn" placeholder="Wofür?"><div class="f"><input id="fa" inputmode="decimal" placeholder="Betrag in €"><button class="act" onclick="spendFree()">Abziehen</button></div><div class="mut">Wird vom Gesamtbetrag abgezogen, unabhängig vom freigeschalteten Geld. Gesamt: '+eur(S.total)+'</div></div>';h+='<div class="card"><b>Daueraufträge</b>';
+  h+=S.rec.map(function(r,i){return '<div class="row"><b>'+esc(r.n)+'</b><span class="'+(r.t==='in'?'':'neg')+'">'+(r.t==='in'?'+':'−')+eur(r.a)+'</span><button class="ghost" aria-label="Löschen" onclick="delRec('+i+')">×</button></div>'}).join('');
+  h+='<input id="rn" placeholder="Name, z. B. Miete"><div class="f"><input id="ra" inputmode="decimal" placeholder="Betrag"><select id="rt" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;padding:0 8px"><option value="in">Eingang</option><option value="out">Ausgang</option></select></div>'
+  +'<div class="f" style="margin-top:8px"><button class="act" onclick="addRec()">Speichern</button><button class="ghost" onclick="book()">Monat buchen</button></div></div>';
+  h+='<button class="ghost" onclick="reset()">Alle Daten zurücksetzen</button>';
+ }
+ document.getElementById('app').innerHTML=h;
+ msg=null;
+}
+draw();if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
